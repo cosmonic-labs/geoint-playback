@@ -1,0 +1,40 @@
+# Cosmonic Control HTTPTrigger for the geoint-playback http-api component.
+#
+# The HTTPTrigger fronts the http-api component with ingress on the configured
+# host. http-api forwards InSAR processing requests over NATS to task-insar
+# via wasmcloud:messaging/consumer; the task replies on the reply subject.
+#
+# Apply with: kubectl apply -f deploy/control/http-api.yaml
+apiVersion: control.cosmonic.io/v1alpha1
+kind: HTTPTrigger
+metadata:
+  name: gp-httpapi
+  namespace: cosmonic-system
+spec:
+  ingress:
+    host: geoint-playback.localhost.cosmonic.sh
+    paths:
+      - pathType: Prefix
+        path: /
+  timeout: 300s
+  replicas: 1
+  template:
+    spec:
+      hostInterfaces:
+        - namespace: wasi
+          package: logging
+          version: 0.1.0-draft
+          interfaces:
+            - logging
+        - namespace: wasmcloud
+          package: messaging
+          version: "0.2.0"
+          interfaces:
+            - consumer
+            - types
+      components:
+        - name: http-api
+          image: ghcr.io/cosmonic-labs/geoint-playback/http-api:0.1.0
+          localResources:
+            allowedHosts:
+              - "https://earth-search.aws.element84.com"
