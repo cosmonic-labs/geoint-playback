@@ -91,6 +91,45 @@ wash dev         # start wasmCloud host with NATS, hot-reload enabled
 
 Open [http://localhost:8000](http://localhost:8000).
 
+### Deploy to Cosmonic Control
+
+`deploy/control/httptrigger.yaml` is a ready-to-apply manifest declaring both
+components as a single `HTTPTrigger` (`http-api`) plus a `WorkloadDeployment`
+(`task-insar`) that subscribes to `tasks.insar` over NATS.
+
+```bash
+# 1. Kind cluster with port 80/443 forwarded to Traefik's NodePorts
+cat > kind-config.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 30443
+        hostPort: 443
+        protocol: TCP
+EOF
+kind create cluster --config ./kind-config.yaml
+
+# 2. Cosmonic Control + hostgroup
+helm upgrade --install cosmonic-control oci://ghcr.io/cosmonic/cosmonic-control \
+  --version 0.4.1 \
+  --namespace cosmonic-system --create-namespace \
+  --set 'ingress.hosts[0].host=geoint-playback.localhost.cosmonic.sh'
+
+helm upgrade --install hostgroup oci://ghcr.io/cosmonic/cosmonic-control-hostgroup \
+  --version 0.4.1 --namespace cosmonic-system
+
+# 3. Apply the manifest
+kubectl apply -f https://raw.githubusercontent.com/cosmonic-labs/geoint-playback/main/deploy/control/httptrigger.yaml
+```
+
+`*.localhost.cosmonic.sh` resolves to `127.0.0.1`, so once the workloads are
+ready, browse to <http://geoint-playback.localhost.cosmonic.sh>.
+
 ## Usage
 
 1. **Search for a location** -- use the geocoding search bar (top of page) to find a city or region, or click a validation site from the sidebar.
